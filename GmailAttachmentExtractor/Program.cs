@@ -1,5 +1,5 @@
 ﻿
 //Run
 var gmailExtractor = new GmailAttachmentExtractor();
-await gmailExtractor.ExtractAttachment();
+await gmailExtractor.ExtractAllAttachments(false);
 
