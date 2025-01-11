@@ -1,9 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35527.113 d17.12
+VisualStudioVersion = 17.12.35527.113
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GmailAttachmentExtractor", "GmailAttachmentExtractor\GmailAttachmentExtractor.csproj", "{F8FFA215-68A5-46B0-9E63-40C01A03A609}"
+	ProjectSection(ProjectDependencies) = postProject
+		{405D24A2-4405-4388-B25D-8A1C83E185F5} = {405D24A2-4405-4388-B25D-8A1C83E185F5}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SQLite", "SQLite\SQLite.csproj", "{405D24A2-4405-4388-B25D-8A1C83E185F5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +20,10 @@ Global
 		{F8FFA215-68A5-46B0-9E63-40C01A03A609}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F8FFA215-68A5-46B0-9E63-40C01A03A609}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F8FFA215-68A5-46B0-9E63-40C01A03A609}.Release|Any CPU.Build.0 = Release|Any CPU
+		{405D24A2-4405-4388-B25D-8A1C83E185F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{405D24A2-4405-4388-B25D-8A1C83E185F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{405D24A2-4405-4388-B25D-8A1C83E185F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{405D24A2-4405-4388-B25D-8A1C83E185F5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

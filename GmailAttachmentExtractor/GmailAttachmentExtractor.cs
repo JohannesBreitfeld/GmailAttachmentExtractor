@@ -2,14 +2,20 @@
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
 using Microsoft.Extensions.Configuration;
+using SQLite;
 using static Google.Apis.Requests.BatchRequest;
 
 public class GmailAttachmentExtractor
 {
     public GmailService? Service { get; private set; }
-    public DateTime? lastDownloadedMessageDate { get; set; }
+    public DateTime LastRetrievedMessageDate { get; set; }
+    
+    public GmailAttachmentExtractor()
+    {
+        LastRetrievedMessageDate = GetLastExtractionDate();
+    }
 
-   public async Task StartService()
+    public async Task StartService()
     {
         var config = new ConfigurationBuilder().AddUserSecrets<GmailAttachmentExtractor>().Build();
 
@@ -40,11 +46,13 @@ public class GmailAttachmentExtractor
             return;
         }
 
+        using var db = new SQLiteContext();
+
         string? dateFilter = null;
 
-        if (onlyGetNew && lastDownloadedMessageDate is not null)
+        if (onlyGetNew)
         {
-            dateFilter = lastDownloadedMessageDate?.ToString("yyyy/MM/dd");
+            dateFilter = LastRetrievedMessageDate.ToString("yyyy/MM/dd");
         }
 
         var allThreads = new List<Google.Apis.Gmail.v1.Data.Thread>();
@@ -53,6 +61,10 @@ public class GmailAttachmentExtractor
         do
         {
             var request = Service.Users.Threads.List("me");
+            if (dateFilter is not null)
+            {
+                request.Q = $"after:{dateFilter}";
+            }
             request.MaxResults = 500;
             request.PageToken = nextPageToken;
 
@@ -76,28 +88,37 @@ public class GmailAttachmentExtractor
                     {
                         continue;
                     }
-                    DateTime messageDate = UnixTimeToDateTime(message.InternalDate.Value);
+                    
+                    DateTime messageDate = UnixTimeToDateTime(message.InternalDate!.Value);
 
-                    if (!lastDownloadedMessageDate.HasValue || messageDate > lastDownloadedMessageDate.Value)
+                    if (messageDate > LastRetrievedMessageDate)
                     {
-                        lastDownloadedMessageDate = messageDate;
+                        LastRetrievedMessageDate = messageDate;
                     }
 
-                    //var attachId = part.Body.AttachmentId;
-                    //var attachRequest = Service.Users.Messages.Attachments.Get("me", message.Id, attachId);
-                    //var attachData = attachRequest.Execute();
-                    //byte[] data = Convert.FromBase64String(attachData.Data.Replace('-', '+').Replace('_', '/'));
+                    var attachId = part.Body.AttachmentId;
+                    var attachRequest = Service.Users.Messages.Attachments.Get("me", message.Id, attachId);
+                    var attachData = attachRequest.Execute();
+                    byte[] data = Convert.FromBase64String(attachData.Data.Replace('-', '+').Replace('_', '/'));
 
-                    var fileName = messageDate.ToString();
-                    //var folderPath = Path.Combine(Environment.CurrentDirectory, "Attachments");
-                    //Directory.CreateDirectory(folderPath);
-                    //var filePath = Path.Combine(folderPath, fileName);
+                    var fileName = part.PartId;
+                    var folderPath = Path.Combine(Environment.CurrentDirectory, "Attachments");
+                    Directory.CreateDirectory(folderPath);
+                    var filePath = Path.Combine(folderPath, fileName!);
 
-                    //File.WriteAllBytes(filePath, data);
+                    File.WriteAllBytes(filePath, data);
+
+                    await db.ImageAttachments.AddAsync(new ImageAttachment() { Id = fileName, Timestamp = messageDate });
 
                     Console.WriteLine(fileName);
                 }
             }
+
+            await db.ExtractionDates.AddAsync(new ExtractionDate() { Date= LastRetrievedMessageDate });
+
+            await db.SaveChangesAsync();
+
+            Service.Dispose();
         }
     }
 
@@ -105,6 +126,18 @@ public class GmailAttachmentExtractor
     {
         var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(unixTime).DateTime;
         return dateTime.ToLocalTime();
+    }
+
+
+    public DateTime GetLastExtractionDate()
+    {
+        using var context = new SQLiteContext();
+
+        var latestExtraction = context.ExtractionDates
+            .OrderByDescending(d => d.Date)
+            .FirstOrDefault();
+
+        return latestExtraction?.Date ?? DateTime.MinValue;
     }
 }
 
