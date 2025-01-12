@@ -7,15 +7,14 @@ using static Google.Apis.Requests.BatchRequest;
 
 public class GmailAttachmentExtractor
 {
-    public GmailService? Service { get; private set; }
     public DateTime LastRetrievedMessageDate { get; set; }
     
     public GmailAttachmentExtractor()
     {
-        LastRetrievedMessageDate = GetLastExtractionDate();
+        //LastRetrievedMessageDate = GetLastExtractionDate();
     }
 
-    public async Task StartService()
+    public async Task<GmailService> StartService()
     {
         var config = new ConfigurationBuilder().AddUserSecrets<GmailAttachmentExtractor>().Build();
 
@@ -31,17 +30,19 @@ public class GmailAttachmentExtractor
                 CancellationToken.None
             );
 
-        Service = new GmailService(new BaseClientService.Initializer()
+        var service = new GmailService(new BaseClientService.Initializer()
         {
             HttpClientInitializer = credential
         });
+
+        return service;
     }
 
    public async Task ExtractAllAttachments(bool onlyGetNew = true)
    {
-        await StartService();
+        using var service = await StartService();
 
-        if(Service == null)
+        if(service == null)
         {
             return;
         }
@@ -60,7 +61,7 @@ public class GmailAttachmentExtractor
 
         do
         {
-            var request = Service.Users.Threads.List("me");
+            var request = service.Users.Threads.List("me");
             if (dateFilter is not null)
             {
                 request.Q = $"after:{dateFilter}";
@@ -77,7 +78,7 @@ public class GmailAttachmentExtractor
         foreach (var thread in allThreads)
         {
 
-            var threadRequest = Service.Users.Threads.Get("me", thread.Id);
+            var threadRequest = service.Users.Threads.Get("me", thread.Id);
             var threadData = threadRequest.Execute();
 
             foreach (var message in threadData.Messages)
@@ -88,7 +89,7 @@ public class GmailAttachmentExtractor
                     {
                         continue;
                     }
-                    
+
                     DateTime messageDate = UnixTimeToDateTime(message.InternalDate!.Value);
 
                     if (messageDate > LastRetrievedMessageDate)
@@ -97,14 +98,16 @@ public class GmailAttachmentExtractor
                     }
 
                     var attachId = part.Body.AttachmentId;
-                    var attachRequest = Service.Users.Messages.Attachments.Get("me", message.Id, attachId);
+                    var attachRequest = service.Users.Messages.Attachments.Get("me", message.Id, attachId);
                     var attachData = attachRequest.Execute();
                     byte[] data = Convert.FromBase64String(attachData.Data.Replace('-', '+').Replace('_', '/'));
 
-                    var fileName = part.PartId;
-                    var folderPath = Path.Combine(Environment.CurrentDirectory, "Attachments");
-                    Directory.CreateDirectory(folderPath);
-                    var filePath = Path.Combine(folderPath, fileName!);
+
+                    var relativePath = Path.Combine("..", "..", "..", "..", "Attachments");
+                    var absolutePath = Path.GetFullPath(relativePath);
+                    var fileName = message.Id + part.Filename;
+                    Directory.CreateDirectory(absolutePath);
+                    var filePath = Path.Combine(absolutePath, fileName!);
 
                     File.WriteAllBytes(filePath, data);
 
@@ -112,14 +115,16 @@ public class GmailAttachmentExtractor
 
                     Console.WriteLine(fileName);
                 }
-            }
 
+                await db.SaveChangesAsync();
+
+            }
+        }
             await db.ExtractionDates.AddAsync(new ExtractionDate() { Date= LastRetrievedMessageDate });
 
             await db.SaveChangesAsync();
 
-            Service.Dispose();
-        }
+            service.Dispose();
     }
 
     public DateTime UnixTimeToDateTime(long unixTime)
